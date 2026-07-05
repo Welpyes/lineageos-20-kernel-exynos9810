@@ -83,7 +83,7 @@ jobs:
           export ANDROID_MAJOR_VERSION=q
 
           make exynos9810-star2lte_defconfig
-          make -j$(nproc --all) KCFLAGS="-Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=strict-prototypes -Wno-error=return-type" 2>&1 | tee build.log
+          make -j$(nproc --all) KCFLAGS="-Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=strict-prototypes -Wno-error=return-type -Wno-error=format" 2>&1 | tee build.log
 
       - name: Create build details
         if: always()
