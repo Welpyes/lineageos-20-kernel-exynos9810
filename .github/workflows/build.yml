@@ -1,0 +1,135 @@
+name: Build LineageOS 20 Kernel (Exynos 9810)
+
+on:
+  workflow_dispatch:
+    inputs:
+      BRANCH:
+        description: Kernel branch
+        required: true
+        default: lineage-20
+      SILENT_BUILD:
+        description: Silent build logs
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            bc \
+            bison \
+            build-essential \
+            cpio \
+            flex \
+            git \
+            kmod \
+            libelf-dev \
+            libssl-dev \
+            lz4 \
+            make \
+            openssl \
+            perl \
+            python-is-python3 \
+            python3 \
+            tar \
+            unzip \
+            wget \
+            zip
+
+      - name: Clone kernel repo
+        run: |
+          git clone \
+            --depth=1 \
+            --branch "${{ inputs.BRANCH }}" \
+            https://github.com/LineageOS/android_kernel_samsung_exynos9810.git
+
+          cd android_kernel_samsung_exynos9810
+
+          echo "KERNEL_ROOT=$(pwd)" >> "$GITHUB_ENV"
+          echo "Cloned kernel repo at: $(pwd)"
+          git remote -v
+          git branch --show-current
+          git rev-parse --short HEAD
+
+      - name: Download GCC 4.9 toolchain
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          git clone --depth=1 \
+            https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
+            toolchain
+
+          echo "Toolchain ready at $(pwd)/toolchain"
+          ls -la toolchain/bin/aarch64-linux-android-gcc
+
+      - name: Fix DTC yylloc build error
+        run: |
+          cd "$KERNEL_ROOT"
+
+          sed -i '/YYLTYPE yylloc;/d' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          sed -i '/YYLTYPE yylloc;/d' scripts/dtc/dtc-lexer.lex.c || true
+
+      - name: Build kernel
+        run: |
+          cd "$KERNEL_ROOT"
+
+          export ARCH=arm64
+          export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
+          export ANDROID_MAJOR_VERSION=q
+
+          make exynos9810-star2lte_defconfig
+          make -j$(nproc --all) 2>&1 | tee build.log
+
+      - name: Create build details
+        if: always()
+        run: |
+          cd "$KERNEL_ROOT"
+
+          BUILD_NAME="star2lte-$(git rev-parse --short HEAD)-$(date +'%Y%m%d%H%M%S')"
+          echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
+
+          {
+            echo "Device: SM-G965N (star2lte)"
+            echo "Kernel: LineageOS 20 (4.9.118)"
+            echo "Defconfig: exynos9810-star2lte_defconfig"
+            echo "Green screen fix: applied"
+            echo "CONFIG_KALLSYMS_ALL: enabled"
+            echo "Repo: https://github.com/LineageOS/android_kernel_samsung_exynos9810.git"
+            echo "Branch: ${{ inputs.BRANCH }}"
+            echo "Commit: $(git rev-parse --short HEAD)"
+            echo "Date: $(date)"
+          } > buildDetails.txt
+
+          if [ -f .config ]; then
+            cp .config build_config.txt
+          fi
+
+      - name: Upload config and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Config-${{ env.BUILD_NAME }}
+          path: |
+            ${{ env.KERNEL_ROOT }}/.config
+            ${{ env.KERNEL_ROOT }}/build_config.txt
+            ${{ env.KERNEL_ROOT }}/buildDetails.txt
+            ${{ env.KERNEL_ROOT }}/build.log
+          if-no-files-found: warn
+
+      - name: Upload kernel artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-${{ env.BUILD_NAME }}
+          path: |
+            ${{ env.KERNEL_ROOT }}/arch/arm64/boot/Image
+            ${{ env.KERNEL_ROOT }}/arch/arm64/boot/Image.gz
+            ${{ env.KERNEL_ROOT }}/arch/arm64/boot/dts/exynos/*.dtb
+            ${{ env.KERNEL_ROOT }}/arch/arm64/boot/dts/exynos/*.dtbo
+          if-no-files-found: warn
+          compression-level: 9
