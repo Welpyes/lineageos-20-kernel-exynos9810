@@ -152,6 +152,55 @@ void init_dsu_info(struct decon_device *decon)
 	decon->dsu.mode = DSU_MODE_1;
 }
 
+int decon_set_dsu_mode(struct decon_device *decon, int mode)
+{
+	struct decon_lcd *lcd_info = decon->lcd_info;
+	struct lcd_mres_info *mres_info = &lcd_info->dt_lcd_mres;
+	struct dsu_info dsu;
+	int ret, i, dsi_cnt;
+	struct decon_param param;
+
+	if (mode < DSU_MODE_1 || mode >= DSU_MODE_MAX)
+		return -EINVAL;
+	if (mode > mres_info->mres_number)
+		return -EINVAL;
+	if (!mres_info->mres_en)
+		return -EOPNOTSUPP;
+	if (decon->dsu.mode == mode)
+		return 0;
+
+	memset(&dsu, 0, sizeof(dsu));
+	dsu.left = 0;
+	dsu.top = 0;
+	dsu.right = mres_info->res_info[mode - 1].width;
+	dsu.bottom = mres_info->res_info[mode - 1].height;
+	dsu.mode = mode;
+	dsu.needupdate = 1;
+
+	decon_reg_wait_idle_status_timeout(decon->id, IDLE_WAIT_TIMEOUT);
+
+	dsi_cnt = (decon->dt.dsi_mode == DSI_MODE_DUAL_DSI) ? 2 : 1;
+	for (i = 0; i < dsi_cnt; i++) {
+		ret = v4l2_subdev_call(decon->out_sd[i], core, ioctl,
+				DSIM_IOC_DSU, &dsu);
+		if (ret)
+			decon_err("DECON:ERR:%s:DSIM_IOC_DSU failed on out_sd[%d]\n",
+					__func__, i);
+	}
+
+	decon_to_init_param(decon, &param);
+	decon_reg_set_dsu(decon->id, decon->dt.dsi_mode, &param);
+
+	dpu_init_win_update(decon);
+
+	memcpy(&decon->dsu, &dsu, sizeof(struct dsu_info));
+
+	decon_info("DECON:INFO:%s:DSU set to mode %d (%dx%d)\n",
+			__func__, mode, dsu.right, dsu.bottom);
+
+	return 0;
+}
+
 int set_dsu_win_config(struct decon_device *decon,
 	struct decon_win_config *windata, struct decon_reg_data *regs)
 {

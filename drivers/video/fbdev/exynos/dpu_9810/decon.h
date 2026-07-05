@@ -1644,6 +1644,7 @@ int set_dsu_win_config(struct decon_device *decon,
 	struct decon_win_config *windata, struct decon_reg_data *regs);
 void init_dsu_info(struct decon_device *decon);
 int set_dsu_config(struct decon_device *decon, struct decon_reg_data *regs);
+int decon_set_dsu_mode(struct decon_device *decon, int mode);
 void decon_reg_set_dsu(u32 id, enum decon_dsi_mode dsi_mode, struct decon_param *p);
 #endif
 /* IOCTL commands */

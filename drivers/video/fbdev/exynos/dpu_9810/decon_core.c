@@ -4012,6 +4012,10 @@ static int decon_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_display;
 
+#ifdef CONFIG_SUPPORT_DSU
+	decon_set_dsu_mode(decon, DSU_MODE_2);
+#endif
+
 	decon_info("decon%d registered successfully", decon->id);
 
 	return 0;
