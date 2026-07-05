@@ -42,23 +42,23 @@ jobs:
             wget \
             zip
 
-      - name: Clone kernel repo
+      - name: Checkout kernel repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Set kernel root
         run: |
-          git clone \
-            --depth=1 \
-            --branch "${{ inputs.BRANCH }}" \
-            https://github.com/LineageOS/android_kernel_samsung_exynos9810.git
-
-          cd android_kernel_samsung_exynos9810
-
-          echo "KERNEL_ROOT=$(pwd)" >> "$GITHUB_ENV"
-          echo "Cloned kernel repo at: $(pwd)"
+          echo "KERNEL_ROOT=${{ github.workspace }}" >> "$GITHUB_ENV"
+          echo "Cloned kernel repo at: ${{ github.workspace }}"
           git remote -v
           git branch --show-current
           git rev-parse --short HEAD
 
       - name: Download GCC 4.9 toolchain
-        working-directory: ${{ env.KERNEL_ROOT }}
+        working-directory: ${{ github.workspace }}
         run: |
           git clone --depth=1 \
             https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
@@ -83,7 +83,7 @@ jobs:
           export ANDROID_MAJOR_VERSION=q
 
           make exynos9810-star2lte_defconfig
-          make -j$(nproc --all) 2>&1 | tee build.log
+          make -j$(nproc --all) KCFLAGS="-Wno-error=unused-variable -Wno-error=unused-but-set-variable" 2>&1 | tee build.log
 
       - name: Create build details
         if: always()
